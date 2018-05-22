@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Complex Polylines</title>
+    <style>
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 100%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+     <script src="map2.js "></script>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script src="jquery.min.js"></script>
+    <script>
+
+      // This example creates an interactive map which constructs a polyline based on
+      // user clicks. Note that the polyline only appears once its path property
+      // contains two LatLng coordinates.
+
+      var poly;
+      var map;
+     var map;
+        var infoWindow = null;
+        var defaultZoom = 12;
+        var   defaultLocation = {lat: 20.707797, lng: 105.312029};
+        var poly;
+        var line;
+        var firstPoint;
+        var markers = [];
+        var infoMarkers = {};
+        var infoMarkerNames = {};
+        var isClosed = false;
+        var bounds = new google.maps.LatLngBounds();
+
+        $(document).ready(function() {
+            $(".btn.pull-right.span2").each(function () {
+                if ($(this).text().trim().length > 13) {
+                    $(this).css("min-width", "145px");
+                    $(this).css("margin-bottom", "10px");
+                }
+            });
+
+            if (navigator.geolocation) {
+                var browserSupportFlag = true;
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    defaultLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+                }, function() {});
+            }
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: defaultZoom,
+              center: {lat: 20.707797, lng: 105.312029},
+                mapTypeId: google.maps.MapTypeId.HYBRID,
+                scaleControl: true,
+                mapTypeControl: false,
+                streetViewControl: false
+            });
+
+            isClosed = false;
+            markers = ("").split(';');
+            var points = [];
+            for (var i = 0; i < markers.length - 1; i++) {
+                var point = markers[i];
+                var lat = point.split(',')[0];
+                var lng = point.split(',')[1];
+                var latLng = new google.maps.LatLng(lat, lng);
+                points.push(latLng);
+                bounds.extend(latLng);
+            }
+
+            if (points.length > 0) {
+                isClosed = true;
+                poly = new google.maps.Polygon({ map: map, path: points, strokeColor: '#E10000', strokeOpacity: 1.0, strokeWeight: 2, editable: false });
+                UpdateMarkedSurface();
+            } else {
+                line = new google.maps.Polyline({ map: map, path: points, strokeColor: '#E10000', strokeOpacity: 1.0, strokeWeight: 2 });
+            }
+
+            //if not empty/default
+            if (!bounds.equals(new google.maps.LatLngBounds(new google.maps.LatLng(1, -1), new google.maps.LatLng(-180, 180)))) {
+                map.setCenter(bounds.getCenter());
+                map.fitBounds(bounds);
+            }
+          //    bermudaTriangle.setMap(map);
+
+            // // Add a listener for the click event.
+         // map.addListener('click', showArrays);
+
+            InitListener();
+            InitSearchBox();
+            // InitOtherFields();
+        });
+
+
+        function InitListener() {
+            google.maps.event.addListener(map, 'click', function(clickEvent) {
+                if (isClosed)
+                    return;
+
+                var markerIndex = 0;
+                if (poly != null) {
+                    markerIndex = poly.getPath().length;
+                }
+                var markerIndexLine = 0;
+                if (line != null) {
+                    markerIndexLine = line.getPath().length;
+                }
+                if (markerIndexLine > markerIndex) {
+                    markerIndex = markerIndexLine;
+                }
+                var isFirstMarker = markerIndex === 0;
+
+                var marker = new google.maps.Marker({
+                    map: map,
+                    position: clickEvent.latLng,
+                    draggable: true,
+                });
+                markers.push(marker);
+
+
+                if (isFirstMarker) {
+                    var infoWindow = new google.maps.InfoWindow();
+                    infoWindow.setContent("Click vào đây sau khi bạn đánh dấu tất cả đường viền<br/>để hoàn thành khu đất của  bạn của bạn!");
+                    infoWindow.open(map, marker);
+                    marker.setIcon("https://app.agrivi.com/Content/images/marker-orange.png");
+
+                    firstPoint = marker;
+                    google.maps.event.addListener(marker, 'click', function() {
+                        if (isClosed) {
+                            return;
+                        }
+                        if (marker === firstPoint) {
+                            line.setMap(null);
+                            var path = line.getPath();
+                            poly = new google.maps.Polygon({
+                                map: map,
+                                path: path,
+                                strokeColor: '#E10000',
+                                strokeOpacity: 0.8,
+                                strokeWeight: 2,
+                                fillColor: '#E10000',
+                                fillOpacity: 0.35
+                            });
+                            isClosed = true;
+                            map.setOptions({ draggableCursor: 'auto' });
+                            infoWindow.setContent("Nhấp vào nút 'Lưu' bên dưới bản đồ.");
+                            infoWindow.open(map, marker);
+                        } else {
+                            var path = line.getPath();
+                            line.setMap(null);
+                            line = new google.maps.Polyline({
+                                map: map,
+                                path: path,
+                                strokeColor: '#E10000',
+                                strokeOpacity: 0.8,
+                                strokeWeight: 2,
+                                fillColor: '#E10000',
+                                fillOpacity: 0.35
+                            });
+                        }
+                        UpdateMarkedSurface();
+                    });
+                }
+
+                google.maps.event.addListener(marker, 'drag', function(dragEvent) {
+                    if (poly != null) {
+                        poly.getPath().setAt(markerIndex, dragEvent.latLng);
+                    } else {
+                        line.getPath().setAt(markerIndex, dragEvent.latLng);
+                    }
+                    UpdateMarkedSurface();
+                });
+
+
+                if (poly != null) {
+                    poly.getPath().push(clickEvent.latLng);
+                }
+                if (line != null) {
+                    line.getPath().push(clickEvent.latLng);
+                }
+
+                UpdateMarkedSurface();
+            });
+        }
+
+        function InitSearchBox() {
+            var markers = [];
+            // Create the search box and link it to the UI element.
+            var input = document.getElementById('pac-input');
+            map.controls[google.maps.ControlPosition.TOP_CENTER].push(input);
+
+            var searchBox = new google.maps.places.SearchBox(input);
+
+            // Listen for the event fired when the user selects an item from the
+            // pick list. Retrieve the matching places for that item.
+            google.maps.event.addListener(searchBox, 'places_changed', function() {
+                var places = searchBox.getPlaces();
+
+                /*
+                for (var i = 0, _marker; _marker = markers[i]; i++) {
+                    _marker.setMap(null);
+                }
+                */
+
+                // For each place, get the icon, place name, and location.
+                markers = [];
+                var bounds = new google.maps.LatLngBounds();
+                for (var i = 0, place; place = places[i]; i++) {
+                    var image = {
+                        url: place.icon,
+                        size: new google.maps.Size(71, 71),
+                        origin: new google.maps.Point(0, 0),
+                        anchor: new google.maps.Point(17, 34),
+                        scaledSize: new google.maps.Size(25, 25)
+                    };
+
+                    // Create a marker for each place.
+                    var marker = new google.maps.Marker({
+                        map: map,
+                        icon: image,
+                        title: place.name,
+                        position: place.geometry.location
+                    });
+
+                    markers.push(marker);
+                    for (var i = 0; i < markers.length; i++) {
+                        markers[i].setMap(map);
+                    }
+
+                    bounds.extend(place.geometry.location);
+                }
+                map.fitBounds(bounds);
+                map.setZoom(defaultZoom);
+
+            });
+
+            google.maps.event.addListener(map, 'bounds_changed', function() {
+                var bounds = map.getBounds();
+                searchBox.setBounds(bounds);
+            });
+        }
+
+
+    </script>
+    <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDD5F9Zet_TmckkgQ20Y2-NHq026f-68cw&callback=initMap">
+    </script>
+  </body>
+</html>
